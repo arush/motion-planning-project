@@ -1,3 +1,7 @@
+## Solution
+Writeup is in [writeup_template.md](./writeup_template.md)
+and the code is in [motion_planning_solution.py](./motion_planning_solution.py) and [planning_utils.py](./planning_utils.py)
+
 # FCND - 3D Motion Planning
 ![Quad Image](./misc/enroute.png)
 
