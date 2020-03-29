@@ -15,14 +15,13 @@
 8. Congratulations!  Your Done!
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/1534/view) Points
-### Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
 
 ---
 ### Writeup / README
 
 #### 1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.  
 
-You're reading it! Below I describe how I addressed each rubric point and where in my code each point is handled.
+Unfortunately due to the bugs in the simulator this project took much longer than it is supposed to so I didn't have time to explore the extra credit stuff.
 
 ### Explain the Starter Code
 
