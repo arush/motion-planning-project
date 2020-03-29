@@ -1,8 +1,11 @@
-## Project: 3D Motion Planning
----
 
+## Solution
+Writeup is in [writeup_template.md](./writeup_template.md)
+and the code is in [motion_planning_solution.py](./motion_planning_solution.py) and [planning_utils.py](./planning_utils.py)
 
-# Required Steps for a Passing Submission:
+# FCND - 3D Motion Planning
+
+## Required Steps for a Passing Submission:
 1. Load the 2.5D map in the colliders.csv file describing the environment.
 2. Discretize the environment into a grid or graph representation.
 3. Define the start and goal locations.
@@ -14,99 +17,90 @@
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/1534/view) Points
 
----
-### Writeup / README
-
-#### 1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.  
-
-Unfortunately due to the bugs in the simulator this project took much longer than it is supposed to so I didn't have time to explore the extra credit stuff.
-
-### Explain the Starter Code
-
-#### 1. Explain the functionality of what's provided in `motion_planning.py` and `planning_utils.py`
-
-These scripts contain a basic planning implementation based on the `backyard_flyer.py` code. 
-
-##### Difference between last project
-The main modification is there is an additional `PLANNING` state in which the `MavlinkPlanning` instance executes a planning strategy `self.plan_path` before executing the strategy by converting the result of the planning to waypoints. 
-
-A visualization of the waypoints in the sim is displayed by a new method called `send_waypoints` that sends the waypoints over the mavlink connection in the MessagePack binary serialization format. 
-
-The `state_callback` is called when the drone is set to the `PLANNING` state and since this python code is all syncronously executed, we know it got to this state by already executing the `self.plan_path` and `self.send_waypoints` methods, so we can safely takeoff. The drone then follows the takeoff, waypoints, landing and disarming transition in the same way the backyard flyer did.
-
-This is a picture of the path it creates
-![Top Down View](https://i.imgur.com/1kmtspv.png)
-
-##### So how does the `plan_path` method work? 
-First it loads the `colliders.csv` and skips the first two rows and loads the obstacle data into memory. 
-
-We make use of the `create_grid` method to generate a basic 2 dimensional array marking every location between the obstacles' top, bottom, left and right sides as `1` instead of `0`. There is no obstacle height in this map, although `TARGET_ALTITUDE` is used in the `create_grid` method to detect if an obstacle should exist in that plane or not.
-
-It sets the start as the map center and the goal as 10m north and 10m east of the start.
-
-It uses the A* algorithim from `planning_utils` and the defined `heuristic` function to generate a path through the grid from start to goal.
-
-It runs through each point in the path, adds the north and east offset to translate between grid coords and the global frame, uses the `TARGET_ALTITUDE` from before and keeps a zero heading throughout.
-
-<!-- 
-Here's | A | Snappy | Table
---- | --- | --- | ---
-1 | `highlight` | **bold** | 7.41
-2 | a | b | c
-3 | *italic* | text | 403
-4 | 2 | 3 | abcd
- -->
+![Quad Image](./misc/enroute.png)
 
 
-### Implementing Your Path Planning Algorithm
 
-#### 1. Set your global home position
-I extracted the first 2 lines of the csv with the `np.loadtxt` since it didn't require importing a new package like `csv` or something. I used 2 lambda functions to strip the columns and extract the floating point values for lat lon. Then I used the built in method `set_home_position` with a zero altitude.
+This project is a continuation of the Backyard Flyer project where you executed a simple square shaped flight path. In this project you will integrate the techniques that you have learned throughout the last several lessons to plan a path through an urban environment. Check out the [project rubric](https://review.udacity.com/#!/rubrics/1534/view) for more detail on what constitutes a passing submission.
 
+## Option to do this project in a GPU backed virtual machine in the Udacity classroom!
+Rather than downloading the simulator and starter files you can simply complete this project in a virual workspace in the Udacity classroom! Follow [these instructions](https://classroom.udacity.com/nanodegrees/nd787/parts/5aa0a956-4418-4a41-846f-cb7ea63349b3/modules/0c12632a-b59a-41c1-9694-2b3508f47ce7/lessons/5f628104-5857-4a3f-93f0-d8a53fe6a8fd/concepts/ab09b378-f85f-49f4-8845-d59025dd8a8e?contentVersion=1.0.0&contentLocale=en-us) to proceed with the VM. 
 
-#### 2. Set your current local position
-I use the local postion from `current_local_position` instead of `self.local_position` because the former is more accurate. I can't understand why.
+## To complete this project on your local machine, follow these instructions:
+### Step 1: Download the Simulator
+This is a new simulator environment!  
 
-#### 3. Set grid start position from local position
-I'm using the `current_local_position` subtracting the offsets and casting to `int` to create coords for the `grid_start`.
+Download the Motion-Planning simulator for this project that's appropriate for your operating system from the [simulator releases respository](https://github.com/udacity/FCND-Simulator-Releases/releases).
 
-#### 4. Set grid goal position from geodetic coords
-Using arbitrary lat lon as the goal by converting to local coords then adjusting with the offset to put it into the grid coords.
+### Step 2: Set up your Python Environment
+If you haven't already, set up your Python environment and get all the relevant packages installed using Anaconda following instructions in [this repository](https://github.com/udacity/FCND-Term1-Starter-Kit)
 
-![Arbitrary Lat Lon Goal](https://i.imgur.com/IdH7VFt.png)
+### Step 3: Clone this Repository
+```sh
+git clone https://github.com/udacity/FCND-Motion-Planning
+```
+### Step 4: Test setup
+The first task in this project is to test the [solution code](https://github.com/udacity/FCND-Motion-Planning/blob/master/backyard_flyer_solution.py) for the Backyard Flyer project in this new simulator. Verify that your Backyard Flyer solution code works as expected and your drone can perform the square flight path in the new simulator. To do this, start the simulator and run the [`backyard_flyer_solution.py`](https://github.com/udacity/FCND-Motion-Planning/blob/master/backyard_flyer_solution.py) script.
 
-#### 5. Modify A* to include diagonal motion (or replace A* altogether)
-I modified `a_star` to include `NORTH_EAST NORTH_WEST SOUTH_EAST SOUTH_WEST` actions by summing the coordinates and adding a diagonal cost of `math.sqrt(2)`. 
+```sh
+source activate fcnd # if you haven't already sourced your Python environment, do so now.
+python backyard_flyer_solution.py
+```
+The quad should take off, fly a square pattern and land, just as in the previous project. If everything functions as expected then you are ready to start work on this project. 
 
-I also modified `valid_actions` to incorporate potential off-grid movements and obstacles in the diagonal space. The simulator now moves in diagonals:
+### Step 5: Inspect the relevant files
+For this project, you are provided with two scripts, `motion_planning.py` and `planning_utils.py`. Here you'll also find a file called `colliders.csv`, which contains the 2.5D map of the simulator environment. 
 
-![Diagonal movement](https://i.imgur.com/pUav8la.png)
+### Step 6: Explain what's going on in  `motion_planning.py` and `planning_utils.py`
 
+`motion_planning.py` is basically a modified version of `backyard_flyer.py` that leverages some extra functions in `planning_utils.py`. It should work right out of the box.  Try running `motion_planning.py` to see what it does. To do this, first start up the simulator, then at the command line:
+ 
+```sh
+source activate fcnd # if you haven't already sourced your Python environment, do so now.
+python motion_planning.py
+```
 
-#### 6. Cull waypoints 
-To cull waypoints I chose the collinearity test. I created three functions in the `planning_utils` file
+You should see the quad fly a jerky path of waypoints to the northeast for about 10 m then land.  What's going on here? Your first task in this project is to explain what's different about `motion_planning.py` from the `backyard_flyer_solution.py` script, and how the functions provided in `planning_utils.py` work. 
 
-The collinearity method converts 2D points to a 3 dimensional array with the z value as 1. This allows us to use the determinant method. If the determinant of a matrix with 3 points is zero then they are deemed collinear.
+### Step 7: Write your planner
 
-The `point` function simply converts a 2D coordinate to a 3 dimensional array element.
+Your planning algorithm is going to look something like the following:
 
-The `collinearity_check` takes 3 points, puts them in a matrix and checks whether the determinant is near enough zero.
+- Load the 2.5D map in the `colliders.csv` file describing the environment.
+- Discretize the environment into a grid or graph representation.
+- Define the start and goal locations. You can determine your home location from `self._latitude` and `self._longitude`. 
+- Perform a search using A* or other search algorithm. 
+- Use a collinearity test or ray tracing method (like Bresenham) to remove unnecessary waypoints.
+- Return waypoints in local ECEF coordinates (format for `self.all_waypoints` is [N, E, altitude, heading], where the drone’s start location corresponds to [0, 0, 0, 0]). 
 
-The `prune_path` method loops through the path in sets of 3 points at a time and removes the middle of the 3 points if the collinearity check is truthy.
+Some of these steps are already implemented for you and some you need to modify or implement yourself.  See the [rubric](https://review.udacity.com/#!/rubrics/1534/view) for specifics on what you need to modify or implement.
 
+### Step 8: Write it up!
+When you're finished, complete a detailed writeup of your solution and discuss how you addressed each step. You can use the [`writeup_template.md`](./writeup_template.md) provided here or choose a different format, just be sure to describe clearly the steps you took and code you used to address each point in the [rubric](https://review.udacity.com/#!/rubrics/1534/view). And have fun!
 
-### Execute the flight
-#### 1. Does it work?
+## Extra Challenges
+The submission requirements for this project are laid out in the rubric, but if you feel inspired to take your project above and beyond, or maybe even keep working on it after you submit, then here are some suggestions for interesting things to try.
 
-Here is a photo of the drone executing the plan, rounding buildings with culled waypoints.
+### Try flying more complex trajectories
+In this project, things are set up nicely to fly right-angled trajectories, where you ascend to a particular altitude, fly a path at that fixed altitude, then land vertically. However, you have the capability to send 3D waypoints and in principle you could fly any trajectory you like. Rather than simply setting a target altitude, try sending altitude with each waypoint and set your goal location on top of a building!
 
-![Works](https://i.imgur.com/58CLCQA.png)
+### Adjust your deadbands
+Adjust the size of the deadbands around your waypoints, and even try making deadbands a function of velocity. To do this, you can simply modify the logic in the `local_position_callback()` function.
 
+### Add heading commands to your waypoints
+This is a recent update! Make sure you have the [latest version of the simulator](https://github.com/udacity/FCND-Simulator-Releases/releases). In the default setup, you're sending waypoints made up of NED position and heading with heading set to 0 in the default setup. Try passing a unique heading with each waypoint. If, for example, you want to send a heading to point to the next waypoint, it might look like this:
 
-### Double check that you've met specifications for each of the [rubric](https://review.udacity.com/#!/rubrics/1534/view) points.
-  
-# Extra Challenges: Real World Planning
+```python
+# Define two waypoints with heading = 0 for both
+wp1 = [n1, e1, a1, 0]
+wp2 = [n2, e2, a2, 0]
+# Set heading of wp2 based on relative position to wp1
+wp2[3] = np.arctan2((wp2[1]-wp1[1]), (wp2[0]-wp1[0]))
+```
 
-For an extra challenge, consider implementing some of the techniques described in the "Real World Planning" lesson. You could try implementing a vehicle model to take dynamic constraints into account, or implement a replanning method to invoke if you get off course or encounter unexpected obstacles.
+This may not be completely intuitive, but this will yield a yaw angle that is positive counterclockwise about a z-axis (down) axis that points downward.
 
+Put all of these together and make up your own crazy paths to fly! Can you fly a double helix?? 
+![Double Helix](./misc/double_helix.gif)
 
+Ok flying a double helix might seem like a silly idea, but imagine you are an autonomous first responder vehicle. You need to first fly to a particular building or location, then fly a reconnaissance pattern to survey the scene! Give it a try!
