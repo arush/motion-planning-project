@@ -1,4 +1,5 @@
 import numpy as np
+import time
 from udacidrone.frame_utils import global_to_local
 
 from planning_utils import a_star, heuristic, create_grid
@@ -6,9 +7,13 @@ from udacidrone import Drone
 from udacidrone.connection import MavlinkConnection
 
 conn = MavlinkConnection('tcp:127.0.0.1:5760', threaded=True, PX4=False)
+time.sleep(2)
 drone = Drone(conn)
+time.sleep(2)
 drone.start()
+time.sleep(2)
 drone.take_control()
+time.sleep(2)
 drone.arm()
 
 

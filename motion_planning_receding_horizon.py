@@ -4,6 +4,12 @@ import msgpack
 from enum import Enum, auto
 
 import numpy as np
+import networkx as nx
+from voxmap import create_voxmap
+from planning import a_star
+from sampling import Sampler
+from shapely.geometry import Polygon, Point, LineString
+from queue import PriorityQueue
 
 from planning_utils import a_star, heuristic, create_grid, prune_path
 from udacidrone import Drone
@@ -40,12 +46,19 @@ class MotionPlanning(Drone):
         self.register_callback(MsgID.LOCAL_VELOCITY, self.velocity_callback)
         self.register_callback(MsgID.STATE, self.state_callback)
 
+    def calculate_deadzone(self):
+        # obtain arbitrary scalar representation of velocity
+        clipped_velocity = np.clip(self.local_velocity, 1, 10)
+        speed = clipped_velocity[0] * clipped_velocity[1] * clipped_velocity[2]
+        # min max deadzonesize
+        return np.clip(speed*3, 3.0, 10.0)
+
     def local_position_callback(self):
         if self.flight_state == States.TAKEOFF:
             if -1.0 * self.local_position[2] > 0.95 * self.target_position[2]:
                 self.waypoint_transition()
         elif self.flight_state == States.WAYPOINT:
-            if np.linalg.norm(self.target_position[0:2] - self.local_position[0:2]) < 1.0:
+            if np.linalg.norm(self.target_position[0:2] - self.local_position[0:2]) < self.calculate_deadzone():
                 if len(self.waypoints) > 0:
                     self.waypoint_transition()
                 else:
