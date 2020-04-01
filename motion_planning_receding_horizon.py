@@ -53,6 +53,8 @@ class MotionPlanning(Drone):
         self.check_state = {}
 
         # for replanning
+        self.global_goal_pos = None
+        self.local_goal_pos = None
         self.replan_in_progress = False
         self.grid_start = None
         self.grid_goal = None
@@ -68,12 +70,6 @@ class MotionPlanning(Drone):
         self.register_callback(MsgID.LOCAL_VELOCITY, self.velocity_callback)
         self.register_callback(MsgID.STATE, self.state_callback)
     
-    def calculate_deadzone(self):
-        # obtain arbitrary scalar representation of velocity
-        clipped_velocity = np.clip(self.local_velocity, 1, 10)
-        speed = clipped_velocity[0] * clipped_velocity[1] * clipped_velocity[2]
-        # min max deadzonesize
-        return np.clip(speed*3, 3.0, 10.0)
 
     def local_position_callback(self):
         if self.flight_state == States.TAKEOFF:
@@ -82,17 +78,20 @@ class MotionPlanning(Drone):
         elif self.flight_state == States.WAYPOINT:
             # since there will be a minimum of 1 waypoint if we haven't reached destination
             # when there is only 1 waypoint we need to replan 
-            if np.linalg.norm(self.target_position[0:2] - self.local_position[0:2]) < self.calculate_deadzone():
+            if (np.linalg.norm(self.target_position[0:2] - self.local_position[0:2]) < 2.0) and (abs(self.local_position[2]) >= 0.95 * abs(self.target_position[2])):
                 if len(self.waypoints) > 0:
                     self.waypoint_transition()
-                elif len(self.waypoints) == 0 and not goal_reached():
+                elif len(self.waypoints) == 0 and not self.goal_reached():
                     self.replan_transition()
                 else:
                     if np.linalg.norm(self.local_velocity[0:2]) < 1.0:
                         self.landing_transition()
     
     def goal_reached(self):
-        return np.linalg.norm(self.target_position[0:2] - self.local_position[0:2]) < 0.5
+        if self.local_goal_pos is not None:
+            return (np.linalg.norm(self.local_goal_pos[0:2] - self.local_position[0:2]) < 1.0) and (abs(self.local_position[2]) >= 0.95 * abs(self.local_goal_pos[2]))
+        else:
+            return False
 
     def velocity_callback(self):
         if self.flight_state == States.LANDING:
@@ -110,14 +109,17 @@ class MotionPlanning(Drone):
             elif self.flight_state == States.PLANNING:
                 self.takeoff_transition()
             elif self.flight_state == States.LOITER:
+                print('state LOITER',len(self.waypoints))
                 self.replan_transition()
             elif self.flight_state == States.REPLAN:
                 # if no plan exists yet
+                print('state REPLAN {} goal reached? {}'.format(len(self.waypoints), self.goal_reached()))
                 if len(self.waypoints) == 0 and not self.goal_reached():
                     self.loiter_transition()
                 elif len(self.waypoints) > 0 and not self.goal_reached():
                     self.waypoint_transition()
-                # else keep hovering or loiter
+                else:
+                    print('goal reached? ', self.goal_reached())
                     
             elif self.flight_state == States.DISARMING:
                 if ~self.armed & ~self.guided:
@@ -177,6 +179,7 @@ class MotionPlanning(Drone):
         print("hover replan transition")
 
         if self.replan_in_progress:
+            print('replan already in progress, moving to loiter')
             pass # state will automatically transition to loiter
         else: 
             self.replan_in_progress = True
@@ -203,11 +206,13 @@ class MotionPlanning(Drone):
         # create rrt_search
         rrt = RRTStar(X, Q, x_init, x_goal, max_samples, r, prc, rewire_count)
         path = rrt.rrt_star()
-        waypoints = [[int(p[1] * VOXEL_SIZE), int(p[0] * VOXEL_SIZE), -int(p[2] * VOXEL_SIZE), 0] for p in path]
+
+        waypoints = [[int(p[1] * VOXEL_SIZE + self.north_offset), int(p[0] * VOXEL_SIZE + self.east_offset), int(p[2] * VOXEL_SIZE), 0] for p in path]
         print(waypoints)
         self.waypoints = waypoints
         # TODO: send waypoints to sim (this is just for visualization of waypoints)
         self.send_waypoints()
+        self.replan_in_progress = False
         # plot
         # plot = Plot("rrt_star_3d")
         # plot.plot_tree(X, rrt.trees)
@@ -262,10 +267,10 @@ class MotionPlanning(Drone):
         self.grid_start = (int(current_local_pos[0] - self.north_offset), int(current_local_pos[1] - self.east_offset))
         # starting TARGET_ALTITUDE meters above current local_position
 
-        global_goal_pos = np.array([GOAL_LON, GOAL_LAT, TARGET_ALTITUDE])
+        self.global_goal_pos = np.array([GOAL_LON, GOAL_LAT, TARGET_ALTITUDE])
 
-        grid_goal_drone_frame = np.array([*global_to_local(global_position=global_goal_pos, global_home=self.global_home)][0:2])
-        self.grid_goal = (int(grid_goal_drone_frame[0] - self.north_offset), int(grid_goal_drone_frame[1] - self.east_offset))
+        self.local_goal_pos = np.array([*global_to_local(global_position=self.global_goal_pos, global_home=self.global_home)])
+        self.grid_goal = (int(self.local_goal_pos[0] - self.north_offset), int(self.local_goal_pos[1] - self.east_offset))
 
         print('Local Start and Goal (NED): ', self.grid_start, self.grid_goal)
         self.global_plan, _ = a_star(grid, heuristic, self.grid_start, self.grid_goal)
