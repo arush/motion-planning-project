@@ -4,25 +4,39 @@ import msgpack
 from enum import Enum, auto
 
 import numpy as np
-import networkx as nx
-from voxmap import create_voxmap
-from planning import a_star
-from sampling import Sampler
-from shapely.geometry import Polygon, Point, LineString
-from queue import PriorityQueue
 
 from planning_utils import a_star, heuristic, create_grid, prune_path
+from receding_h_utils import create_obstacles
+from rrt_utils.search_space.search_space import SearchSpace
+from rrt_utils.rrt.rrt_star import RRTStar
+from rrt_utils.utilities.plotting import Plot
+
 from udacidrone import Drone
 from udacidrone.connection import MavlinkConnection
 from udacidrone.messaging import MsgID
 from udacidrone.frame_utils import global_to_local
 
+VOXEL_SIZE = 1
+VOXMAP_CUBE_SIZE = 300
+# Set goal as some arbitrary position on the grid
+# TODO: adapt to set goal as latitude / longitude position and convert
+GOAL_LAT = 37.792968
+GOAL_LON = -122.397600
+
+TARGET_ALTITUDE = 5
+SAFETY_DISTANCE = 5
+
+# really far
+# GOAL_LAT = 37.7969561
+# GOAL_LON = -122.3991139
 
 class States(Enum):
     MANUAL = auto()
     ARMING = auto()
     TAKEOFF = auto()
     WAYPOINT = auto()
+    REPLAN = auto()
+    LOITER = auto()
     LANDING = auto()
     DISARMING = auto()
     PLANNING = auto()
@@ -38,6 +52,14 @@ class MotionPlanning(Drone):
         self.in_mission = True
         self.check_state = {}
 
+        # for replanning
+        self.replan_in_progress = False
+        self.grid_start = None
+        self.grid_goal = None
+        self.global_plan = None
+        self.north_offset = None
+        self.east_offset = None
+
         # initial state
         self.flight_state = States.MANUAL
 
@@ -45,7 +67,7 @@ class MotionPlanning(Drone):
         self.register_callback(MsgID.LOCAL_POSITION, self.local_position_callback)
         self.register_callback(MsgID.LOCAL_VELOCITY, self.velocity_callback)
         self.register_callback(MsgID.STATE, self.state_callback)
-
+    
     def calculate_deadzone(self):
         # obtain arbitrary scalar representation of velocity
         clipped_velocity = np.clip(self.local_velocity, 1, 10)
@@ -56,14 +78,21 @@ class MotionPlanning(Drone):
     def local_position_callback(self):
         if self.flight_state == States.TAKEOFF:
             if -1.0 * self.local_position[2] > 0.95 * self.target_position[2]:
-                self.waypoint_transition()
+                self.replan_transition()
         elif self.flight_state == States.WAYPOINT:
+            # since there will be a minimum of 1 waypoint if we haven't reached destination
+            # when there is only 1 waypoint we need to replan 
             if np.linalg.norm(self.target_position[0:2] - self.local_position[0:2]) < self.calculate_deadzone():
                 if len(self.waypoints) > 0:
                     self.waypoint_transition()
+                elif len(self.waypoints) == 0 and not goal_reached():
+                    self.replan_transition()
                 else:
                     if np.linalg.norm(self.local_velocity[0:2]) < 1.0:
                         self.landing_transition()
+    
+    def goal_reached(self):
+        return np.linalg.norm(self.target_position[0:2] - self.local_position[0:2]) < 0.5
 
     def velocity_callback(self):
         if self.flight_state == States.LANDING:
@@ -77,9 +106,19 @@ class MotionPlanning(Drone):
                 self.arming_transition()
             elif self.flight_state == States.ARMING:
                 if self.armed:
-                    self.plan_path()
+                    self.plan_global_path()
             elif self.flight_state == States.PLANNING:
                 self.takeoff_transition()
+            elif self.flight_state == States.LOITER:
+                self.replan_transition()
+            elif self.flight_state == States.REPLAN:
+                # if no plan exists yet
+                if len(self.waypoints) == 0 and not self.goal_reached():
+                    self.loiter_transition()
+                elif len(self.waypoints) > 0 and not self.goal_reached():
+                    self.waypoint_transition()
+                # else keep hovering or loiter
+                    
             elif self.flight_state == States.DISARMING:
                 if ~self.armed & ~self.guided:
                     self.manual_transition()
@@ -124,11 +163,68 @@ class MotionPlanning(Drone):
         data = msgpack.dumps(self.waypoints)
         self.connection._master.write(data)
 
-    def plan_path(self):
+    # loiter state is needed for a continuous event based loop between loiter, replan and waypoint
+    def loiter_transition(self):
+        self.flight_state = States.LOITER
+        print("loiter transition")
+
+    def replan_transition(self):
+        # we have grid_start and grid_goal
+        # and for fun lets elevate the goal 10m on every replanning iteration
+        # so we get a nice 3d path
+
+        self.flight_state = States.REPLAN
+        print("hover replan transition")
+
+        if self.replan_in_progress:
+            pass # state will automatically transition to loiter
+        else: 
+            self.replan_in_progress = True
+
+        # pick the last point of the path within the cube
+        vehicle_pos_in_grid = np.array([self.local_position[0] - self.north_offset, self.local_position[1] - self.east_offset, self.local_position[2]])
+        data = np.loadtxt('colliders.csv', delimiter=',', dtype='Float64', skiprows=2)
+        Obstacles, X_dimensions = create_obstacles(data, voxel_size=VOXEL_SIZE, cube_size=VOXMAP_CUBE_SIZE, vehicle_pos=vehicle_pos_in_grid)
+
+        # convert NED to x, y
+        # remember x is East, y is North
+        x_init = ((vehicle_pos_in_grid[1]) // VOXEL_SIZE, (vehicle_pos_in_grid[0]) // VOXEL_SIZE, -vehicle_pos_in_grid[2] // VOXEL_SIZE)  # starting location
+        x_goal = (self.grid_goal[1] // VOXEL_SIZE, self.grid_goal[0] // VOXEL_SIZE, (self.local_position[2] + 20) // VOXEL_SIZE)  # goal location
+
+        Q = np.array([(8, 4)])  # length of tree edges
+        r = 1  # length of smallest edge to check for intersection with obstacles
+        max_samples = 1024  # max number of samples to take before timing out
+        rewire_count = 8  # optional, number of nearby branches to rewire
+        prc = 0.1  # probability of checking for a connection to goal
+
+        # create Search Space
+        X = SearchSpace(X_dimensions, Obstacles)
+
+        # create rrt_search
+        rrt = RRTStar(X, Q, x_init, x_goal, max_samples, r, prc, rewire_count)
+        path = rrt.rrt_star()
+        waypoints = [[int(p[1] * VOXEL_SIZE), int(p[0] * VOXEL_SIZE), -int(p[2] * VOXEL_SIZE), 0] for p in path]
+        print(waypoints)
+        self.waypoints = waypoints
+        # TODO: send waypoints to sim (this is just for visualization of waypoints)
+        self.send_waypoints()
+        # plot
+        # plot = Plot("rrt_star_3d")
+        # plot.plot_tree(X, rrt.trees)
+        # if path is not None:
+        #     plot.plot_path(X, path)
+        # plot.plot_obstacles(X, Obstacles)
+        # plot.plot_start(X, x_init)
+        # plot.plot_goal(X, x_goal)
+        # plot.draw(auto_open=True).py
+
+        
+        
+
+    def plan_global_path(self):
         self.flight_state = States.PLANNING
         print("Searching for a path ...")
-        TARGET_ALTITUDE = 5
-        SAFETY_DISTANCE = 5
+        
 
         self.target_position[2] = TARGET_ALTITUDE
 
@@ -157,50 +253,34 @@ class MotionPlanning(Drone):
         data = np.loadtxt('colliders.csv', delimiter=',', dtype='Float64', skiprows=2)
 
         # Define a grid for a particular altitude and safety margin around obstacles
-        grid, north_offset, east_offset = create_grid(data, TARGET_ALTITUDE, SAFETY_DISTANCE)
-        print("North offset = {0}, east offset = {1}".format(north_offset, east_offset))
-        
+        grid, self.north_offset, self.east_offset = create_grid(data, TARGET_ALTITUDE, SAFETY_DISTANCE)
+        print("North offset = {0}, east offset = {1}".format(self.north_offset, self.east_offset))
+
         # Define starting point on the grid
         # TODO: convert start position to current position rather than map center
 
-        grid_start = (int(current_local_pos[0] - north_offset), int(current_local_pos[1] - east_offset))
+        self.grid_start = (int(current_local_pos[0] - self.north_offset), int(current_local_pos[1] - self.east_offset))
         # starting TARGET_ALTITUDE meters above current local_position
 
-        # Set goal as some arbitrary position on the grid
-        # TODO: adapt to set goal as latitude / longitude position and convert
-        GOAL_LAT = 37.792968
-        GOAL_LON = -122.397600
-        
-        # really far
-        # GOAL_LAT = 37.7969561
-        # GOAL_LON = -122.3991139
-
-        
         global_goal_pos = np.array([GOAL_LON, GOAL_LAT, TARGET_ALTITUDE])
 
         grid_goal_drone_frame = np.array([*global_to_local(global_position=global_goal_pos, global_home=self.global_home)][0:2])
-        grid_goal = (int(grid_goal_drone_frame[0] - north_offset), int(grid_goal_drone_frame[1] - east_offset))
+        self.grid_goal = (int(grid_goal_drone_frame[0] - self.north_offset), int(grid_goal_drone_frame[1] - self.east_offset))
 
-        # grid_goal = (grid_start[0] + 10, grid_start[1] + 10)
+        print('Local Start and Goal (NED): ', self.grid_start, self.grid_goal)
+        self.global_plan, _ = a_star(grid, heuristic, self.grid_start, self.grid_goal)
 
-        # Run A* to find a path from start to goal
-        # TODO: add diagonal motions with a cost of sqrt(2) to your A* implementation
-        # or move to a different search space such as a graph (not done here)
-        print('Local Start and Goal: ', grid_start, grid_goal)
-        
-        path, _ = a_star(grid, heuristic, grid_start, grid_goal)
         # TODO: prune path to minimize number of waypoints
         # TODO (if you're feeling ambitious): Try a different approach altogether!
 
-        pruned_path = prune_path(path)
+        # pruned_path = prune_path(detailed_path)
 
         # Convert path to waypoints
-        waypoints = [[p[0] + north_offset, p[1] + east_offset, TARGET_ALTITUDE, 0] for p in pruned_path]
+        # waypoints = [[p[0] + north_offset, p[1] + east_offset, TARGET_ALTITUDE, 0] for p in pruned_path]
 
         # Set self.waypoints
-        self.waypoints = waypoints
-        # TODO: send waypoints to sim (this is just for visualization of waypoints)
-        self.send_waypoints()
+
+        
 
     def start(self):
         self.start_log("Logs", "NavLog.txt")
