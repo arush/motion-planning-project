@@ -94,10 +94,10 @@ def create_obstacles(data=None, voxel_size=5, cube_size=100, vehicle_pos=np.arra
         [
             vehicle_pos_in_voxel_size[1] - 0.25, # x_lower
             vehicle_pos_in_voxel_size[0] - 0.25, # y_lower
-            abs(vehicle_pos_in_voxel_size[2]) - 1, # z_lower
+            abs(vehicle_pos_in_voxel_size[2]) - 3, # z_lower
             vehicle_pos_in_voxel_size[1] + 0.25, # x_upper
             vehicle_pos_in_voxel_size[0] + 0.25, # y_upper
-            abs(vehicle_pos_in_voxel_size[2]) - 0.5,   # z_upper
+            abs(vehicle_pos_in_voxel_size[2]) - 2.5,   # z_upper
         ]
     ])
 

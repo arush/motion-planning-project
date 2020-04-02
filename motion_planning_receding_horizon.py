@@ -17,18 +17,19 @@ from udacidrone.messaging import MsgID
 from udacidrone.frame_utils import global_to_local
 
 VOXEL_SIZE = 1
-VOXMAP_CUBE_SIZE = 300
+VOXMAP_CUBE_SIZE = 100
 # Set goal as some arbitrary position on the grid
 # TODO: adapt to set goal as latitude / longitude position and convert
 GOAL_LAT = 37.792968
 GOAL_LON = -122.397600
 
-TARGET_ALTITUDE = 5
-SAFETY_DISTANCE = 5
-
 # really far
 # GOAL_LAT = 37.7969561
 # GOAL_LON = -122.3991139
+
+TARGET_ALTITUDE = 5
+SAFETY_DISTANCE = 5
+
 
 class States(Enum):
     MANUAL = auto()
@@ -36,7 +37,7 @@ class States(Enum):
     TAKEOFF = auto()
     WAYPOINT = auto()
     REPLAN = auto()
-    LOITER = auto()
+    # LOITER = auto()
     LANDING = auto()
     DISARMING = auto()
     PLANNING = auto()
@@ -108,15 +109,15 @@ class MotionPlanning(Drone):
                     self.plan_global_path()
             elif self.flight_state == States.PLANNING:
                 self.takeoff_transition()
-            elif self.flight_state == States.LOITER:
-                print('state LOITER',len(self.waypoints))
-                self.replan_transition()
+            # elif self.flight_state == States.LOITER:
+            #     print('state LOITER',len(self.waypoints))
+            #     self.replan_transition()
             elif self.flight_state == States.REPLAN:
                 # if no plan exists yet
                 print('state REPLAN {} goal reached? {}'.format(len(self.waypoints), self.goal_reached()))
-                if len(self.waypoints) == 0 and not self.goal_reached():
-                    self.loiter_transition()
-                elif len(self.waypoints) > 0 and not self.goal_reached():
+                # if len(self.waypoints) == 0 and not self.goal_reached():
+                #     self.loiter_transition()
+                if len(self.waypoints) > 0 and not self.goal_reached():
                     self.waypoint_transition()
                 else:
                     print('goal reached? ', self.goal_reached())
@@ -166,9 +167,9 @@ class MotionPlanning(Drone):
         self.connection._master.write(data)
 
     # loiter state is needed for a continuous event based loop between loiter, replan and waypoint
-    def loiter_transition(self):
-        self.flight_state = States.LOITER
-        print("loiter transition")
+    # def loiter_transition(self):
+    #     self.flight_state = States.LOITER
+    #     print("loiter transition")
 
     def replan_transition(self):
         # we have grid_start and grid_goal
@@ -178,11 +179,12 @@ class MotionPlanning(Drone):
         self.flight_state = States.REPLAN
         print("hover replan transition")
 
-        if self.replan_in_progress:
-            print('replan already in progress, moving to loiter')
-            pass # state will automatically transition to loiter
-        else: 
-            self.replan_in_progress = True
+        # might not be necessary
+        # if self.replan_in_progress:
+        #     print('replan already in progress, moving to loiter')
+        #     pass # state will automatically transition to loiter
+        # else: 
+        #     self.replan_in_progress = True
 
         # pick the last point of the path within the cube
         vehicle_pos_in_grid = np.array([self.local_position[0] - self.north_offset, self.local_position[1] - self.east_offset, self.local_position[2]])
@@ -191,8 +193,11 @@ class MotionPlanning(Drone):
 
         # convert NED to x, y
         # remember x is East, y is North
-        x_init = ((vehicle_pos_in_grid[1]) // VOXEL_SIZE, (vehicle_pos_in_grid[0]) // VOXEL_SIZE, abs(vehicle_pos_in_grid[2]) // VOXEL_SIZE)  # starting location
-        x_goal = (self.grid_goal[1] // VOXEL_SIZE, self.grid_goal[0] // VOXEL_SIZE, (abs(self.local_position[2]) + 20) // VOXEL_SIZE)  # goal location
+        x_init = (int((vehicle_pos_in_grid[1]) // VOXEL_SIZE), int((vehicle_pos_in_grid[0]) // VOXEL_SIZE), int(abs(vehicle_pos_in_grid[2]) // VOXEL_SIZE))  # starting location
+        x_goal = (int(self.grid_goal[1] // VOXEL_SIZE), int(self.grid_goal[0] // VOXEL_SIZE), int((abs(self.local_position[2]) + 20) // VOXEL_SIZE))  # goal location
+
+
+        print('x_init: {}\nx_goal: {}'.format(x_init, x_goal))
 
         Q = np.array([(8, 4)])  # length of tree edges
         r = 1  # length of smallest edge to check for intersection with obstacles
@@ -206,22 +211,26 @@ class MotionPlanning(Drone):
         # create rrt_search
         rrt = RRTStar(X, Q, x_init, x_goal, max_samples, r, prc, rewire_count)
         path = rrt.rrt_star()
-
-        waypoints = [[int(p[1] * VOXEL_SIZE + self.north_offset), int(p[0] * VOXEL_SIZE + self.east_offset), int(p[2] * VOXEL_SIZE), 0] for p in path]
-        print(waypoints)
-        self.waypoints = waypoints
-        # TODO: send waypoints to sim (this is just for visualization of waypoints)
-        self.send_waypoints()
-        self.replan_in_progress = False
+        
+        try:
+            waypoints = [[int(p[1] * VOXEL_SIZE + self.north_offset), int(p[0] * VOXEL_SIZE + self.east_offset), int(p[2] * VOXEL_SIZE), 0] for p in path]
+            print(waypoints)
+            self.waypoints = waypoints
+            # TODO: send waypoints to sim (this is just for visualization of waypoints)
+            self.send_waypoints()
+        except TypeError:
+            print('Could not find a path')
+        
+        # self.replan_in_progress = False
         # plot
-        # plot = Plot("rrt_star_3d")
-        # plot.plot_tree(X, rrt.trees)
-        # if path is not None:
-        #     plot.plot_path(X, path)
-        # plot.plot_obstacles(X, Obstacles)
-        # plot.plot_start(X, x_init)
-        # plot.plot_goal(X, x_goal)
-        # plot.draw(auto_open=True)
+        plot = Plot("rrt_star_3d")
+        plot.plot_tree(X, rrt.trees)
+        if path is not None:
+            plot.plot_path(X, path)
+        plot.plot_obstacles(X, Obstacles)
+        plot.plot_start(X, x_init)
+        plot.plot_goal(X, x_goal)
+        plot.draw(auto_open=True)
 
         
         
