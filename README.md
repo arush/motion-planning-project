@@ -1,11 +1,13 @@
 ## Project: 3D Motion Planning
 
+[![youtube: Receding Horizon RRT* 3D Motion Planning](https://gifs.com/gif/receding-horizon-3d-motion-plan-with-rrt-E8mRNl)](https://www.youtube.com/watch?v=VtXHbCOOd1I&feature=youtu.be "Receding Horizon RRT* 3D Motion Planning")
+
 ---
 ### Writeup / README
 
 #### 1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.  
 
-Unfortunately due to the bugs in the simulator this project took much longer than it is supposed to so I didn't have time to explore the extra credit stuff.
+I completed this project twice. Once with a 2.5D grid plan with A* and another version by adding a receding horizon 3d plan with RRT*.
 
 ### Explain the Starter Code
 
@@ -93,6 +95,16 @@ Here is a photo of the drone executing the plan, rounding buildings with culled 
   
 # Extra Challenges: Real World Planning
 
-For an extra challenge, consider implementing some of the techniques described in the "Real World Planning" lesson. You could try implementing a vehicle model to take dynamic constraints into account, or implement a replanning method to invoke if you get off course or encounter unexpected obstacles.
+For the extra challenge see the video at [https://www.youtube.com/watch?v=VtXHbCOOd1I&feature=youtu.be](https://www.youtube.com/watch?v=VtXHbCOOd1I&feature=youtu.be)
+
+and the corresponding code at [motion_planning_receding_horizon.py](motion_planning_receding_horizon.py)
+
+It computes a global coarse plan over a low fidelity 2.5D map with A* then constantly replans as the vehicle flies. This constant replanning provides increased safety and redundancy in case of incorrect coarse map data or anything that might appear along the way like wind.
+
+Once the vehicle takes off it begins a hi-fidelity 3d dense map plan of it's immediate surroundings, a 100m^3 cube. This is configurable based on on-board compute power. It then uses RRT* to find a 3d path through to the next waypoint. 
+
+On every replan it produces an HTML Plotly visualization of what obstacles it sees inside the 100m^3 "window" and the resultant path of the 3D RRT* algorithm.
+
+Once it reaches the coarse plan goal it performs one last receding horizon replan to find a goal 10m above and then lands.
 
 

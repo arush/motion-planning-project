@@ -42,7 +42,7 @@ def create_obstacles(data=None, voxel_size=5, cube_size=100, vehicle_pos=np.arra
     offset_grid_east_max = east_max - east_min
     offset_grid_north_max = north_max - north_min
     
-    print('offset_grid_east_min: {}\noffset_grid_north_min: {}\noffset_grid_east_max: {}\noffset_grid_north_max: {}\n'.format(offset_grid_east_min,offset_grid_north_min,offset_grid_east_max,offset_grid_north_max))
+    # print('offset_grid_east_min: {}\noffset_grid_north_min: {}\noffset_grid_east_max: {}\noffset_grid_north_max: {}\n'.format(offset_grid_east_min,offset_grid_north_min,offset_grid_east_max,offset_grid_north_max))
 
     # calc moving window
     # y is north, x is east
@@ -77,7 +77,7 @@ def create_obstacles(data=None, voxel_size=5, cube_size=100, vehicle_pos=np.arra
         window_alt_min = int(abs(vehicle_pos_in_voxel_size[2]) - cube_size // 2)
         window_alt_max = int(abs(vehicle_pos_in_voxel_size[2]) + cube_size // 2)
 
-    print('window_y_min: {}\nwindow_x_min: {}\nwindow_alt_min: {}\nwindow_y_max: {}\nwindow_x_max: {}\nwindow_alt_max: {}\n'.format(window_y_min,window_x_min,window_alt_min,window_y_max,window_x_max,window_alt_max))
+    # print('window_y_min: {}\nwindow_x_min: {}\nwindow_alt_min: {}\nwindow_y_max: {}\nwindow_x_max: {}\nwindow_alt_max: {}\n'.format(window_y_min,window_x_min,window_alt_min,window_y_max,window_x_max,window_alt_max))
     
     # Dimensions of Search Space
     X_dimensions = np.array([
@@ -134,6 +134,5 @@ def create_obstacles(data=None, voxel_size=5, cube_size=100, vehicle_pos=np.arra
         obstacles = np.vstack((obstacles, row))
 
     print('built {} obstacles'.format(obstacles.shape[0]))
-    print(obstacles)
     print('\n==== RRT MAP COMPLETE ====\n')
     return (obstacles, X_dimensions)
