@@ -1,6 +1,6 @@
 ## Project: 3D Motion Planning
 
-[![youtube: Receding Horizon RRT* 3D Motion Planning](https://gifs.com/gif/receding-horizon-3d-motion-plan-with-rrt-E8mRNl)](https://www.youtube.com/watch?v=VtXHbCOOd1I&feature=youtu.be "Receding Horizon RRT* 3D Motion Planning")
+[![youtube: Receding Horizon RRT* 3D Motion Planning](https://j.gifs.com/E8mRNl.gif)](https://www.youtube.com/watch?v=VtXHbCOOd1I&feature=youtu.be "Receding Horizon RRT* 3D Motion Planning")
 
 ---
 ### Writeup / README
