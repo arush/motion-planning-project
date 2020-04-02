@@ -11,6 +11,12 @@ See more: https://www.youtube.com/watch?v=VtXHbCOOd1I&feature=youtu.be
 
 I completed this project twice. Once with a 2.5D grid plan with A* and another version by adding a receding horizon 3d plan with RRT*.
 
+The solutions are:
+[motion_planning_grid.py](motion_planning_grid.py)
+
+[motion_planning_receding_horizon.py](motion_planning_receding_horizon.py)
+
+
 ### Explain the Starter Code
 
 #### 1. Explain the functionality of what's provided in `motion_planning.py` and `planning_utils.py`
