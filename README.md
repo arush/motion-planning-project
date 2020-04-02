@@ -1,8 +1,10 @@
 ## 3D Motion Planning with 2.5D A* and 3D RRT* with Receding Horizon
 
+Full demo: https://www.youtube.com/watch?v=VtXHbCOOd1I&feature=youtu.be
+
 [![youtube: Receding Horizon RRT* 3D Motion Planning](E8mRNl.gif)](https://www.youtube.com/watch?v=VtXHbCOOd1I&feature=youtu.be "Receding Horizon RRT* 3D Motion Planning")
 
-See more: https://www.youtube.com/watch?v=VtXHbCOOd1I&feature=youtu.be
+
 
 ---
 ### Writeup / README
