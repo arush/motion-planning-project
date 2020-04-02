@@ -191,8 +191,8 @@ class MotionPlanning(Drone):
 
         # convert NED to x, y
         # remember x is East, y is North
-        x_init = ((vehicle_pos_in_grid[1]) // VOXEL_SIZE, (vehicle_pos_in_grid[0]) // VOXEL_SIZE, -vehicle_pos_in_grid[2] // VOXEL_SIZE)  # starting location
-        x_goal = (self.grid_goal[1] // VOXEL_SIZE, self.grid_goal[0] // VOXEL_SIZE, (self.local_position[2] + 20) // VOXEL_SIZE)  # goal location
+        x_init = ((vehicle_pos_in_grid[1]) // VOXEL_SIZE, (vehicle_pos_in_grid[0]) // VOXEL_SIZE, abs(vehicle_pos_in_grid[2]) // VOXEL_SIZE)  # starting location
+        x_goal = (self.grid_goal[1] // VOXEL_SIZE, self.grid_goal[0] // VOXEL_SIZE, (abs(self.local_position[2]) + 20) // VOXEL_SIZE)  # goal location
 
         Q = np.array([(8, 4)])  # length of tree edges
         r = 1  # length of smallest edge to check for intersection with obstacles
@@ -221,7 +221,7 @@ class MotionPlanning(Drone):
         # plot.plot_obstacles(X, Obstacles)
         # plot.plot_start(X, x_init)
         # plot.plot_goal(X, x_goal)
-        # plot.draw(auto_open=True).py
+        # plot.draw(auto_open=True)
 
         
         
